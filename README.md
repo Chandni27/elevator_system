@@ -20,21 +20,6 @@ CLI flags: `--elevators`, `--floors`, `--capacity`, `--scheduler {dispatch,neare
 
 ---
 
-## Requirements checklist
-
-| # | Requirement | Status | Where / how it is verified |
-|---|---|---|---|
-| 1a | Serve every request eventually | **Met** for any finite input | Assigned passengers are never dropped; a full car always has dropoffs to make; `max_time` guard raises on deadlock. `test_req1_everyone_served...` |
-| 1a | No passenger waits indefinitely | **Partly met** - see "Starvation" below | No hard wait bound; empirical waits are about 1-2 sweeps at normal load |
-| 1b | Minimize total time (wait + ride) | **Met** (heuristic, not provably optimal) | Dispatcher minimizes the added total passenger-time; beats nearest-car baseline in `--compare` |
-| 1c | Capacity honored | **Met** | `Elevator.serve_floor`; `test_req1_capacity_never_exceeded_from_log` recomputes load from the log |
-| 1c | Direction logic honored | **Met** | Cars only pick up passengers going their way; `test_req1_direction_logic_from_log` |
-| 2 | Origin + destination at request time; assignment final | **Met** | `Simulation._admit` sets `elevator_id` once; nothing reassigns or edits a destination. `test_req2_assignment_is_final_and_honored` |
-| 3 | 1 time unit = 1 floor, discrete ticks, no wall clock | **Met** | Tick loop in `Simulation.run`; idle gaps still tick (`test_idle_gap_is_ticked_through`) |
-| 4 | Configurable elevators, floors, capacity | **Met** | `Config`, `simulate(...)`, CLI flags. `test_req4_configurable_sizes` |
-| 5 | Scheduler; input `time,id,source,dest`; no peeking | **Met** | `RequestFeed.poll(now)` only releases requests with `time <= now`. `test_req5_no_peeking` proves removing future requests changes nothing before they arrive |
-| 6 | Position log: one row per timestamp from 0 | **Met** | `elevator_positions.csv`: header `time,elevator_0,...`, then one row per tick |
-| 7 | Min/max/avg wait and total + observations | **Met** | `stats.build_report`: min/max/avg/median/p90/stdev, histogram, overhead vs ideal, per-car utilisation |
 
 ### Starvation (the one honest gap)
 For a finite input every passenger is served, and the simulation proves it by finishing. But there is no *hard* upper bound on one passenger's wait. A car sweeps the whole building in at most `floors - 1` ticks, so a waiting passenger is normally reached within a sweep or two. The one way to be skipped repeatedly is a car that is full every time it reaches their floor. Measured max waits (5 seeds each):
@@ -130,29 +115,3 @@ The projection reuses the real elevator code, so direction, capacity, detours an
 * Mean-focused: tail waits can be long under heavy load.
 * Starvation guarantee is empirical (see above), not formal.
 
----
-
-# Interview prep
-
-## Likely follow-up questions (and short answers)
-1. **Why not just send the nearest car?** It ignores direction, load and who is on board. In the rush-hour test, its average total time was about 55% higher.
-2. **Time complexity?** Per request: E cars x O(S) projection steps (S = ticks until the car empties). Total O(R x E x S). Cache the base projection per car per tick to halve it.
-3. **Is it optimal?** No: greedy/online dial-a-ride. Measure the gap against an offline lower bound.
-4. **Can anyone starve?** Not for finite input; no hard bound under sustained overload. Fix with aging.
-5. **Full car passing a waiting passenger?** Pickups aren't targets while full; the passenger stays assigned and is picked up on a later sweep; the cost function priced that delay in.
-6. **Car breaks or floor closes?** Mark it out of service and reassign its waiting passengers (riders are stuck). That relaxes "assignment is final".
-7. **Scale to 100 floors / 20 cars?** Zoning, capped projections, cached baselines, evaluate top-k cars.
-8. **How do you validate it?** Invariant tests derived from the output (capacity, direction, one floor per tick, everyone served, no peeking), randomized configs, baseline comparison, replay real traffic.
-9. **Why a `Scheduler` interface?** Swap and A/B algorithms on identical input.
-10. **Which metric?** Average, p95 or max wait is a business decision; ask who the building serves.
-
-## FDE priorities
-1. Clarify the real objective first (average vs worst-case wait, energy, accessibility).
-2. Safety and correctness invariants over cleverness; encode them as tests.
-3. Ship a simple explainable baseline, then iterate with before/after numbers.
-4. Observability: logs, percentiles, utilisation, so you can explain a long wait.
-5. Test on realistic bursty traffic, not just uniform random.
-6. Configuration without code changes.
-7. Failure modes and fallbacks (bad input, deadlock guard, dispatcher crash).
-8. Explain trade-offs to non-engineers ("cuts average wait ~40% but a few people wait longer; here's the knob").
-9. Integrate with the customer's systems and monitor in production.
