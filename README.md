@@ -1,22 +1,72 @@
 # Destination-Dispatch Elevator Simulation
 
-Pure Python 3.8+, no dependencies.
+A simulation of a destination-dispatch elevator system. A passenger submits their start floor and destination at request time, the controller assigns an elevator immediately (final), and time advances one tick (one floor of travel) at a time. Pure Python, no dependencies.
 
-```bash
-python3 main.py --requests sample_requests.csv --compare   # run sample, writes elevator_positions.csv
-python3 main.py --random 200 --seed 7 --elevators 4 --floors 30 --capacity 6 --compare
-python3 -m unittest discover -s tests -v                   # 16 tests
-```
+**Time spent:** about 2 hours.
 
+## How to run
+
+**Requirements:** Python 3.8 or newer. Nothing to install. Use `python3` on macOS/Linux (on Windows it may be `python`).
+
+1. **Get the code**
+   ```bash
+   git clone https://github.com/Chandni27/elevator_system.git
+   cd elevator_system
+   ```
+2. **Run the tests** (16 should pass)
+   ```bash
+   python3 -m unittest discover -s tests -v
+   ```
+3. **Run the sample input.** Prints the summary report and writes `elevator_positions.csv`.
+   ```bash
+   python3 main.py --requests sample_requests.csv
+   ```
+4. **Compare against the baseline** (smart dispatch vs. nearest-car) on the same requests
+   ```bash
+   python3 main.py --requests sample_requests.csv --compare
+   ```
+5. **Use your own input.** Make a CSV with one request per line, `time,id,source,dest` (header row optional, any row order), for example `10,passenger3,20,1`:
+   ```bash
+   python3 main.py --requests my_requests.csv --elevators 3 --floors 20 --capacity 4
+   ```
+6. **Or generate random traffic**
+   ```bash
+   python3 main.py --random 300 --pattern rush --seed 7 --elevators 4 --floors 30 --capacity 6 --compare
+   ```
+
+### Options
+
+| Flag | Meaning | Default |
+|---|---|---|
+| `--requests FILE` | CSV input: `time,id,source,dest` | (none) |
+| `--random N` | Generate N random requests instead of a file | (off) |
+| `--pattern` | `uniform` or `rush` (60% of trips start at the lobby); with `--random` | `uniform` |
+| `--seed S` | Random seed, for repeatable runs; with `--random` | `1` |
+| `--horizon T` | Latest request time for `--random` | `200` |
+| `--elevators N` | Number of elevators | `3` |
+| `--floors N` | Number of floors (numbered 1..N) | `20` |
+| `--capacity N` | Max passengers per elevator | `4` |
+| `--scheduler` | `dispatch` (main algorithm) or `nearest` (baseline) | `dispatch` |
+| `--log FILE` | Where to write the position log | `elevator_positions.csv` |
+| `--compare` | Also run every scheduler on the same input and print a comparison | off |
+
+### What you get
+* **Console report:** min, max, average, median, p90 and standard deviation for wait, ride and total time, plus notable observations, a wait histogram and per-elevator stats.
+* **Position log** (`elevator_positions.csv`): one row per time tick starting at 0, one column per elevator. The position at time `t` is the car's floor after loading and before it moves.
+  ```
+  time,elevator_0,elevator_1,elevator_2
+  0,1,1,1
+  1,2,2,1
+  2,3,3,1
+  ```
+
+### Use it as a library
 ```python
 from elevator_sim import Request, simulate, build_report
 reqs = [Request(10, "passenger3", 20, 1), (0, "passenger1", 1, 12)]   # Request, tuple, or dict all work
 result = simulate(reqs, num_elevators=3, num_floors=20, capacity=4, log_path="positions.csv")
 print(build_report(result))
 ```
-
-CLI flags: `--elevators`, `--floors`, `--capacity`, `--scheduler {dispatch,nearest}`, `--log FILE`,
-`--random N --seed S --pattern {uniform,rush}`, `--compare`.
 
 ---
 
@@ -75,7 +125,7 @@ The projection reuses the real elevator code, so direction, capacity, detours an
 | dispatch (what-if cost) | 62.9 | 75.3 | 287 |
 | nearest car (baseline) | 104.1 | 116.4 | 473 |
 
-## Why LOOK (and not something else)
+## Why LOOK algorithm
 * **It is the direction logic.** The spec requires direction rules; a sweep makes "go one way, pick up people going that way" the whole policy, with no special cases.
 * **Predictable and explainable.** A sweep takes at most `floors - 1` ticks, so you can reason about worst cases and starvation. Customers and interviewers can follow it.
 * **Cheap to simulate.** The dispatcher runs the movement rule many times per request (every car, twice). A simple rule keeps that fast.
@@ -114,4 +164,5 @@ The projection reuses the real elevator code, so direction, capacity, detours an
 * Greedy, one request at a time; not globally optimal.
 * Mean-focused: tail waits can be long under heavy load.
 * Starvation guarantee is empirical (see above), not formal.
+
 
