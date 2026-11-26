@@ -31,7 +31,7 @@ class RequestFeed:
     """
 
     def __init__(self, requests: Sequence[Request]):
-        self._pending = sorted(requests, key=lambda r: r.time)
+        self._pending = sorted((Request.coerce(r) for r in requests), key=lambda r: r.time)
         self._next = 0
 
     def poll(self, now: int) -> List[Request]:

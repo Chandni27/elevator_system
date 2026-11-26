@@ -13,6 +13,16 @@ class Request:
     source: int
     dest: int
 
+    @classmethod
+    def coerce(cls, item) -> "Request":
+        """Accept a Request, a (time, id, source, dest) tuple/list, or a dict with those keys."""
+        if isinstance(item, cls):
+            return item
+        if isinstance(item, dict):
+            return cls(int(item["time"]), str(item["id"]), int(item["source"]), int(item["dest"]))
+        t, pid, src, dst = item
+        return cls(int(t), str(pid), int(src), int(dst))
+
 
 @dataclass
 class Passenger:
